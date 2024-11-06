@@ -1,7 +1,7 @@
 -- First, connect to MySQL and use the database
-mysql -u root -p
-CREATE DATABASE IF NOT EXISTS cargo_db;
-USE cargo_db;
+-- mysql -u root -p
+-- CREATE DATABASE IF NOT EXISTS cargo_db;
+-- USE cargo_db;
 
 -- Drop tables if they exist (in reverse order of dependencies)
 DROP TABLE IF EXISTS CargoHandling;

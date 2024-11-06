@@ -21,3 +21,17 @@ USE cargo_db;
 -- Load the SQL Script
 source database_clear.sql;
 ```
+The `database_clear.sql` script will create the required database schema, tables,etc.
+
+## Usage 
+
+### 1.Logining in as other users
+
+you can login as an admin by:
+
+```bash
+mysql -u cargo_admin -p 
+```
+The password is `cargo_password`,similarly for `cargo_customer`, `cargo_handler` and `cargo_customer`.
+
+Check testing.md to see what functionalites the code should have
