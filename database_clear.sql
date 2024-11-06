@@ -181,3 +181,186 @@ INSERT INTO Cargo (cargo_id, customer_id, cargo_type_id, status_id, flight_id, w
 ('C1', 'U4', 'CT1', 'CS1', 'F1', 1000.00, 'L1', 'L2', 5000.00),
 ('C2', 'U5', 'CT2', 'CS2', 'F2', 500.00, 'L2', 'L3', 4000.00);
 
+-- Add these statements to the end of your existing SQL file
+
+-- User Creation and Privileges (Add after table creation and data insertion)
+-- Note: Adjust 'cargo_db' to your actual database name
+CREATE USER IF NOT EXISTS 'cargo_admin'@'localhost' IDENTIFIED BY 'admin_password';
+CREATE USER IF NOT EXISTS 'cargo_handler'@'localhost' IDENTIFIED BY 'handler_password';
+CREATE USER IF NOT EXISTS 'cargo_customer'@'localhost' IDENTIFIED BY 'customer_password';
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON *.* TO 'cargo_admin'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON Cargo TO 'cargo_handler'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON CargoHandling TO 'cargo_handler'@'localhost';
+GRANT SELECT ON Flight TO 'cargo_handler'@'localhost';
+GRANT SELECT, INSERT ON Cargo TO 'cargo_customer'@'localhost';
+GRANT SELECT ON Flight TO 'cargo_customer'@'localhost';
+
+FLUSH PRIVILEGES;
+
+-- Stored Procedures
+DELIMITER //
+
+-- 1. Create new cargo booking
+CREATE PROCEDURE IF NOT EXISTS CreateCargoBooking(
+    IN p_customer_id VARCHAR(36),
+    IN p_cargo_type_id VARCHAR(36),
+    IN p_flight_id VARCHAR(36),
+    IN p_weight DECIMAL(10,2),
+    IN p_origin_id VARCHAR(36),
+    IN p_destination_id VARCHAR(36)
+)
+BEGIN
+    DECLARE v_base_rate DECIMAL(10,2);
+    DECLARE v_calculated_price DECIMAL(10,2);
+    DECLARE v_cargo_id VARCHAR(36);
+    
+    -- Generate UUID for cargo_id
+    SET v_cargo_id = UUID();
+    
+    -- Get base rate from cargo type
+    SELECT base_rate_per_kg INTO v_base_rate 
+    FROM CargoType 
+    WHERE cargo_type_id = p_cargo_type_id;
+    
+    -- Calculate price
+    SET v_calculated_price = p_weight * v_base_rate;
+    
+    -- Insert new cargo
+    INSERT INTO Cargo (
+        cargo_id,
+        customer_id,
+        cargo_type_id,
+        status_id,
+        flight_id,
+        weight,
+        origin_id,
+        destination_id,
+        calculated_price
+    ) VALUES (
+        v_cargo_id,
+        p_customer_id,
+        p_cargo_type_id,
+        'CS1', -- PENDING status
+        p_flight_id,
+        p_weight,
+        p_origin_id,
+        p_destination_id,
+        v_calculated_price
+    );
+END //
+
+-- 2. Update cargo status with handling log
+CREATE PROCEDURE IF NOT EXISTS UpdateCargoStatus(
+    IN p_cargo_id VARCHAR(36),
+    IN p_new_status_id VARCHAR(36),
+    IN p_handler_id VARCHAR(36),
+    IN p_action_id VARCHAR(36),
+    IN p_notes TEXT
+)
+BEGIN
+    -- Update cargo status
+    UPDATE Cargo 
+    SET status_id = p_new_status_id
+    WHERE cargo_id = p_cargo_id;
+    
+    -- Log handling action
+    INSERT INTO CargoHandling (
+        handling_id,
+        cargo_id,
+        handler_id,
+        action_id,
+        notes
+    ) VALUES (
+        UUID(),
+        p_cargo_id,
+        p_handler_id,
+        p_action_id,
+        p_notes
+    );
+END //
+
+DELIMITER ;
+
+-- Example Complex Queries (Can be run as needed)
+
+-- 1. Nested Query: Find all handlers who have handled high-value cargo 
+SELECT DISTINCT u.username, u.email
+FROM "User" u
+WHERE u.user_id IN (
+    SELECT ch.handler_id
+    FROM CargoHandling ch
+    JOIN Cargo c ON ch.cargo_id = c.cargo_id
+    WHERE c.calculated_price > (
+        SELECT AVG(calculated_price)
+        FROM Cargo
+    )
+);
+
+-- 2. Join Query: Comprehensive cargo tracking information
+SELECT 
+    c.cargo_id,
+    ct.type_name AS cargo_type,
+    cs.status_name,
+    f.flight_id,
+    orig.airport_code AS origin,
+    dest.airport_code AS destination,
+    u.username AS customer,
+    GROUP_CONCAT(
+        CONCAT(ha.action_name, ' by ', handler.username, ' at ', ch.handling_time)
+        ORDER BY ch.handling_time
+    ) AS handling_history
+FROM Cargo c
+JOIN CargoType ct ON c.cargo_type_id = ct.cargo_type_id
+JOIN CargoStatus cs ON c.status_id = cs.status_id
+JOIN Flight f ON c.flight_id = f.flight_id
+JOIN Location orig ON c.origin_id = orig.location_id
+JOIN Location dest ON c.destination_id = dest.location_id
+JOIN "User" u ON c.customer_id = u.user_id
+LEFT JOIN CargoHandling ch ON c.cargo_id = ch.cargo_id
+LEFT JOIN HandlingAction ha ON ch.action_id = ha.action_id
+LEFT JOIN "User" handler ON ch.handler_id = handler.user_id
+GROUP BY 
+    c.cargo_id, 
+    ct.type_name, 
+    cs.status_name, 
+    f.flight_id, 
+    orig.airport_code, 
+    dest.airport_code, 
+    u.username;
+
+-- 3. Aggregate Query: Cargo handling statistics by location
+SELECT 
+    l.airport_code,
+    l.city,
+    COUNT(c.cargo_id) AS total_cargo_handled,
+    SUM(c.weight) AS total_weight_handled,
+    ROUND(AVG(c.calculated_price), 2) AS avg_cargo_value,
+    COUNT(CASE WHEN ct.requires_special_handling THEN 1 END) AS special_handling_count
+FROM Location l
+LEFT JOIN Cargo c ON l.location_id = c.origin_id
+LEFT JOIN CargoType ct ON c.cargo_type_id = ct.cargo_type_id
+GROUP BY l.location_id, l.airport_code, l.city
+HAVING total_cargo_handled > 0
+ORDER BY total_cargo_handled DESC;
+
+-- Example usage of stored procedures
+-- To create a new cargo booking:
+CALL CreateCargoBooking(
+    'U4', -- customer_id
+    'CT1', -- cargo_type_id
+    'F1',  -- flight_id
+    1500.00, -- weight
+    'L1',    -- origin_id
+    'L2'     -- destination_id
+);
+
+-- To update cargo status:
+CALL UpdateCargoStatus(
+    'C1',    -- cargo_id
+    'CS2',   -- new_status_id (IN_TRANSIT)
+    'U2',    -- handler_id
+    'HA1',   -- action_id (PICKUP)
+    'Cargo picked up from origin warehouse' -- notes
+);
