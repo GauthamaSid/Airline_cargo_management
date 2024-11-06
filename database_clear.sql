@@ -1,3 +1,8 @@
+-- First, connect to MySQL and use the database
+mysql -u root -p
+CREATE DATABASE IF NOT EXISTS cargo_db;
+USE cargo_db;
+
 -- Drop tables if they exist (in reverse order of dependencies)
 DROP TABLE IF EXISTS CargoHandling;
 DROP TABLE IF EXISTS Cargo;
@@ -5,20 +10,20 @@ DROP TABLE IF EXISTS Flight;
 DROP TABLE IF EXISTS Aircraft;
 DROP TABLE IF EXISTS UserRole;
 DROP TABLE IF EXISTS Role;
-DROP TABLE IF EXISTS "User";
+DROP TABLE IF EXISTS Users; -- Changed from "User"
 DROP TABLE IF EXISTS Location;
 DROP TABLE IF EXISTS CargoType;
 DROP TABLE IF EXISTS CargoStatus;
 DROP TABLE IF EXISTS HandlingAction;
 
--- Create tables
+-- Create tables (with Users instead of "User")
 CREATE TABLE Role (
     role_id VARCHAR(36) PRIMARY KEY,
     role_name VARCHAR(20) UNIQUE NOT NULL,
     description TEXT
 );
 
-CREATE TABLE "User" (
+CREATE TABLE Users ( -- Changed from "User"
     user_id VARCHAR(36) PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(50) NOT NULL,
@@ -31,7 +36,7 @@ CREATE TABLE UserRole (
     user_id VARCHAR(36),
     role_id VARCHAR(36),
     assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES User(user_id),
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
     FOREIGN KEY (role_id) REFERENCES Role(role_id)
 );
 
@@ -93,7 +98,7 @@ CREATE TABLE Cargo (
     destination_id VARCHAR(36),
     booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     calculated_price DECIMAL(10,2) NOT NULL,
-    FOREIGN KEY (customer_id) REFERENCES User(user_id),
+    FOREIGN KEY (customer_id) REFERENCES Users(user_id),
     FOREIGN KEY (cargo_type_id) REFERENCES CargoType(cargo_type_id),
     FOREIGN KEY (status_id) REFERENCES CargoStatus(status_id),
     FOREIGN KEY (flight_id) REFERENCES Flight(flight_id),
@@ -109,7 +114,7 @@ CREATE TABLE CargoHandling (
     handling_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notes TEXT,
     FOREIGN KEY (cargo_id) REFERENCES Cargo(cargo_id),
-    FOREIGN KEY (handler_id) REFERENCES User(user_id),
+    FOREIGN KEY (handler_id) REFERENCES Users(user_id),
     FOREIGN KEY (action_id) REFERENCES HandlingAction(action_id)
 );
 
@@ -121,13 +126,14 @@ INSERT INTO Role (role_id, role_name, description) VALUES
 ('R3', 'customer', 'Books and tracks cargo');
 
 -- Users (password: 'password' for all users)
-INSERT INTO User (user_id, username, password, email) VALUES
+INSERT INTO Users (user_id, username, password, email) VALUES
 ('U1', 'admin', 'password', 'admin@cargo.com'),
 ('U2', 'handler1', 'password', 'handler1@cargo.com'),
 ('U3', 'handler2', 'password', 'handler2@cargo.com'),
 ('U4', 'customer1', 'password', 'customer1@email.com'),
 ('U5', 'customer2', 'password', 'customer2@email.com');
 
+-- Rest of your INSERT statements...
 -- UserRoles
 INSERT INTO UserRole (user_role_id, user_id, role_id) VALUES
 ('UR1', 'U1', 'R1'),
@@ -287,7 +293,7 @@ DELIMITER ;
 
 -- 1. Nested Query: Find all handlers who have handled high-value cargo 
 SELECT DISTINCT u.username, u.email
-FROM "User" u
+FROM Users u
 WHERE u.user_id IN (
     SELECT ch.handler_id
     FROM CargoHandling ch
@@ -317,10 +323,10 @@ JOIN CargoStatus cs ON c.status_id = cs.status_id
 JOIN Flight f ON c.flight_id = f.flight_id
 JOIN Location orig ON c.origin_id = orig.location_id
 JOIN Location dest ON c.destination_id = dest.location_id
-JOIN "User" u ON c.customer_id = u.user_id
+JOIN Users u ON c.customer_id = u.user_id
 LEFT JOIN CargoHandling ch ON c.cargo_id = ch.cargo_id
 LEFT JOIN HandlingAction ha ON ch.action_id = ha.action_id
-LEFT JOIN "User" handler ON ch.handler_id = handler.user_id
+LEFT JOIN Users handler ON ch.handler_id = handler.user_id
 GROUP BY 
     c.cargo_id, 
     ct.type_name, 
