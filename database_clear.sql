@@ -179,8 +179,8 @@ INSERT INTO HandlingAction (action_id, action_name, description, requires_verifi
 
 -- Sample Flights
 INSERT INTO Flight (flight_id, aircraft_id, origin_id, destination_id, departure_time, arrival_time, flight_status) VALUES
-('F1', 'A1', 'L1', 'L2', '2024-03-10 10:00:00', '2024-03-10 22:00:00', 'SCHEDULED'),
-('F2', 'A2', 'L2', 'L3', '2024-03-11 14:00:00', '2024-03-12 06:00:00', 'SCHEDULED');
+('F1', 'A1', 'L1', 'L2', '2024-12-10 10:00:00', '2024-12-10 22:00:00', 'SCHEDULED'),
+('F2', 'A2', 'L2', 'L3', '2024-12-11 14:00:00', '2024-12-12 06:00:00', 'SCHEDULED');
 
 -- Sample Cargo
 INSERT INTO Cargo (cargo_id, customer_id, cargo_type_id, status_id, flight_id, weight, origin_id, destination_id, calculated_price) VALUES

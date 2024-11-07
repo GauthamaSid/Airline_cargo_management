@@ -29,23 +29,20 @@ The `database_clear.sql` script will create the required database schema, tables
 
 python3 -m venv cargo_env
 source cargo_env/bin/activate  # or `cargo_env\Scripts\activate` on Windows
-Install Required Packages: Install Streamlit and MySQL connector:
 
 ```
-### 3. Run streamlet
+### 3. Install streamlet and dependencies 
+
 ```python
-pip install streamlit mysql-connector-python
+pip install streamlit mysql-connector-python pandas
 ```
 
 ## Usage 
 
-### 1.Logining in as other users
-
-you can login as an admin by:
-
 ```bash
-mysql -u cargo_admin -p 
+ streamlit run app.py
 ```
-The password is `cargo_password`,similarly for `cargo_customer`, `cargo_handler` and `cargo_customer`.
+
+The password is `password`,similarly for `cargo_customer`, `cargo_handler` and `cargo_customer`.
 
 Check `testing.md` to see what functionalites the code should have
