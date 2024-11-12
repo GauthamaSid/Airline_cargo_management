@@ -64,6 +64,7 @@ def authenticate(username, password):
     cursor.close()
     conn.close()
     return user
+
 def show_admin_dashboard():
 
     st.header("Admin Dashboard")
@@ -159,7 +160,104 @@ def show_admin_dashboard():
             st.metric("Total Weight", f"{cargo_df['Weight'].sum():.2f} kg")
         with col3:
             st.metric("Total Value", f"${cargo_df['Price'].sum():.2f}")
+        with st.expander("➕ Create New Cargo"):
+            # Fetch Cargo Types and Flights
+            cargo_types = pd.read_sql("SELECT cargo_type_id, type_name FROM CargoType", conn)
+            flights = pd.read_sql("""
+                SELECT f.flight_id,
+                    CONCAT(l_orig.airport_code, ' -> ', l_dest.airport_code,
+                            ' (', DATE_FORMAT(f.departure_time, '%Y-%m-%d %H:%i'), ')') as flight_info
+                FROM Flight f
+                JOIN Location l_orig ON f.origin_id = l_orig.location_id
+                JOIN Location l_dest ON f.destination_id = l_dest.location_id
+                WHERE f.departure_time > NOW()
+                ORDER BY f.departure_time
+            """, conn)
 
+            # Cargo creation form
+            customer = st.selectbox("Customer", pd.read_sql("SELECT username FROM Users", conn)['username'])
+            cargo_type = st.selectbox("Cargo Type", cargo_types['type_name'])
+            weight = st.number_input("Weight (kg)", min_value=0.1, max_value=10000.0, value=100.0)
+            flight = st.selectbox("Flight", flights['flight_info'])
+
+            # Book cargo button
+            if st.button("Create Cargo"):
+                cursor = conn.cursor()
+                cargo_type_id = cargo_types.loc[cargo_types['type_name'] == cargo_type, 'cargo_type_id'].iloc[0]
+                flight_id = flights.loc[flights['flight_info'] == flight, 'flight_id'].iloc[0]
+
+                # Get customer_id
+                customer_id = pd.read_sql(f"SELECT user_id FROM Users WHERE username = '{customer}'", conn).iloc[0]['user_id']
+
+                # Insert new cargo record
+                try:
+                    cursor.execute("""
+                        INSERT INTO Cargo (cargo_id, customer_id, cargo_type_id, weight, flight_id, status_id, calculated_price)
+                        VALUES (%s, %s, %s, %s, %s, 'CS1', %s)
+                    """, (str(uuid.uuid4()), customer_id, cargo_type_id, weight, flight_id, weight * 10))  # Assuming price calculation
+                    conn.commit()
+                    st.success("Cargo created successfully!")
+                    st.rerun()
+                except Exception as e:
+                    conn.rollback()
+                    st.error(f"Error creating cargo: {e}")
+                finally:
+                    cursor.close()
+        with st.expander("✏️ Update Cargo"):
+            cargo_id = st.selectbox("Select Cargo ID", cargo_df['Cargo ID'].tolist())
+
+            if cargo_id:
+                # Get current cargo details
+                cargo_details = pd.read_sql(f"""
+                    SELECT c.*, ct.type_name, cs.status_name, f.flight_id
+                    FROM Cargo c
+                    JOIN CargoType ct ON c.cargo_type_id = ct.cargo_type_id
+                    JOIN CargoStatus cs ON c.status_id = cs.status_id
+                    JOIN Flight f ON c.flight_id = f.flight_id
+                    WHERE c.cargo_id = '{cargo_id}'
+                """, conn).iloc[0]
+
+                # Display current cargo details
+                st.write(f"Current Cargo: {cargo_id}")
+                st.write(f"Cargo Type: {cargo_details['type_name']}")
+                st.write(f"Weight: {cargo_details['weight']} kg")
+                st.write(f"Flight: {cargo_details['flight_id']}")
+                st.write(f"Status: {cargo_details['status_name']}")
+
+                # Allow the admin to update fields
+                new_weight = st.number_input("New Weight (kg)", value=cargo_details['weight'], min_value=0.1, max_value=10000.0)
+                new_status = st.selectbox("New Status", ["CS1", "CS2", "CS3"], index=["CS1", "CS2", "CS3"].index(cargo_details['status_id']))
+
+                # Select new flight (if needed)
+                flights = pd.read_sql("""
+                    SELECT f.flight_id,
+                        CONCAT(l_orig.airport_code, ' -> ', l_dest.airport_code,
+                                ' (', DATE_FORMAT(f.departure_time, '%Y-%m-%d %H:%i'), ')') as flight_info
+                    FROM Flight f
+                    JOIN Location l_orig ON f.origin_id = l_orig.location_id
+                    JOIN Location l_dest ON f.destination_id = l_dest.location_id
+                    WHERE f.departure_time > NOW()
+                    ORDER BY f.departure_time
+                """, conn)
+                new_flight = st.selectbox("New Flight", flights['flight_info'])
+                new_flight_id = flights.loc[flights['flight_info'] == new_flight, 'flight_id'].iloc[0]
+
+                if st.button("Update Cargo"):
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("""
+                            UPDATE Cargo
+                            SET weight = %s, status_id = %s, flight_id = %s
+                            WHERE cargo_id = %s
+                        """, (new_weight, new_status, new_flight_id, cargo_id))
+                        conn.commit()
+                        st.success("Cargo updated successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"Error updating cargo: {e}")
+                    finally:
+                        cursor.close()
     # Flights Tab
     with tabs[2]:
         st.subheader("Flight Management")
@@ -298,6 +396,7 @@ import pandas as pd
 import streamlit as st
 import numpy as np
 from matplotlib.patches import Rectangle
+import plotly.express as px
 
 def show_admin_dashboard_metrics():
     conn = get_database_connection()
@@ -349,49 +448,34 @@ def show_admin_dashboard_metrics():
         st.metric("Upcoming Flights", upcoming_flights)
 
     with col3:
+        # Plot the Users by Role chart using Plotly with rounded corners
         st.write("Users by Role")
-        fig, ax = plt.subplots(figsize=(6, 4), constrained_layout=True)
-        fig.set_facecolor('#f1efe7')
-        ax.set_facecolor('#f1efe7')
-
-        # set the colors for each range
-        colors = ['#d97857', '#ffa366', '#ffff99', '#99ff99']
-        color_thresholds = [1, 25, 50, 75]
-
-        # Plot the bars
-        bars = ax.bar(
-            role_data['Role'],
-            role_data['Count'],
-            color=[colors[c] for c in np.digitize(role_data['Count'], color_thresholds) - 1]
+        fig = px.bar(
+            role_data,
+            x='Role',
+            y='Count',
+            text='Count',
+            color='Role',
+            color_discrete_sequence=px.colors.qualitative.Pastel
         )
 
-        # Loop through the bars and fix the index issue
-        for idx, bar in enumerate(bars):  # Use idx instead of 'i'
-            # Add text on top of bars
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5, role_data['Count'][idx],  # Use idx here
-                    ha='center', va='bottom', color='white', weight='bold', fontsize=12)
+        # Update layout for rounded corners and cleaner look
+        fig.update_layout(
+            plot_bgcolor="#f1efe7",
+             paper_bgcolor="#f1efe7",
+            font=dict(size=12),
+            showlegend=False,
+            margin=dict(l=20, r=20, t=40, b=20),
+            barcornerradius=14  # Rounded corners with a radius of 15 pixels
+        )
 
-            # Create a rounded rectangle to replace the bar's top
-            bar.set_height(bar.get_height() * 0.9)  # Reduce the bar height slightly for a rounded effect
-            ax.add_patch(Rectangle(
-                (bar.get_x(), bar.get_height()), bar.get_width(), bar.get_height(),
-                color=bar.get_facecolor(), zorder=2, clip_on=False,
-                linewidth=0, edgecolor="none", linestyle="solid",
-                facecolor=bar.get_facecolor(), alpha=1
-            ))
+        # Update trace settings to add text on top of each bar without border
+        fig.update_traces(textposition="outside")
 
-        # Hide the spines and ticks
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.tick_params(axis='x', colors='black')
-        ax.tick_params(axis='y', colors='black')
-
-        st.pyplot(fig)
+        # Display the Plotly chart in Streamlit
+        st.plotly_chart(fig)
 
     conn.close()
-
 # Cargo Handler Dashboard
 def show_handler_dashboard():
     st.header("Cargo Handler Dashboard")
@@ -449,102 +533,102 @@ def show_handler_dashboard():
 
 def show_customer_dashboard():
     st.header("Customer Dashboard")
-    
+
     conn = get_database_connection()
-    
-    # Show customer's cargo
-    st.subheader("Your Cargo Shipments")
-    customer_cargo_df = pd.read_sql("""
-        SELECT 
-            c.cargo_id as 'Cargo ID',
-            ct.type_name as 'Cargo Type',
-            cs.status_name as Status,
-            c.weight as Weight,
-            c.calculated_price as Price,
-            l_orig.airport_code as Origin,
-            l_dest.airport_code as Destination,
-            f.flight_id as 'Flight ID',
-            f.departure_time as Departure
-        FROM Cargo c
-        JOIN CargoType ct ON c.cargo_type_id = ct.cargo_type_id
-        JOIN CargoStatus cs ON c.status_id = cs.status_id
-        JOIN Location l_orig ON c.origin_id = l_orig.location_id
-        JOIN Location l_dest ON c.destination_id = l_dest.location_id
-        JOIN Flight f ON c.flight_id = f.flight_id
-        WHERE c.customer_id = %s
-        ORDER BY f.departure_time DESC
-    """, conn, params=(st.session_state.user['user_id'],))
-    display_dataframe(customer_cargo_df)
 
-    # Calculate total cargo weight and total cost for this customer
-    st.subheader("Cargo Summary")
-    cargo_summary_df = pd.read_sql("""
-        SELECT 
-            COALESCE(SUM(c.weight), 0) AS 'Total Weight (kg)',
-            COALESCE(SUM(c.calculated_price), 0) AS 'Total Cost'
-        FROM Cargo c
-        WHERE c.customer_id = %s
-    """, conn, params=(st.session_state.user['user_id'],))
+    # Display cargo summary and customer's cargo in two columns
+    col1, col2 = st.columns(2)
 
-    # Display total weight and cost results
-    if not cargo_summary_df.empty:
-        total_weight = cargo_summary_df.iloc[0]['Total Weight (kg)']
-        total_cost = cargo_summary_df.iloc[0]['Total Cost']
-        
-        col1, col2 = st.columns(2)
-        with col1:
+    with col1:
+        st.subheader("Cargo Summary")
+        cargo_summary_df = pd.read_sql("""
+            SELECT
+                COALESCE(SUM(c.weight), 0) AS 'Total Weight (kg)',
+                COALESCE(SUM(c.calculated_price), 0) AS 'Total Cost'
+            FROM Cargo c
+            WHERE c.customer_id = %s
+        """, conn, params=(st.session_state.user['user_id'],))
+
+        # Display total weight and cost results
+        if not cargo_summary_df.empty:
+            total_weight = cargo_summary_df.iloc[0]['Total Weight (kg)']
+            total_cost = cargo_summary_df.iloc[0]['Total Cost']
+
             st.metric("Total Cargo Weight", f"{total_weight:.2f} kg")
-        with col2:
             st.metric("Total Cargo Cost", f"${total_cost:.2f}")
+
+    with col2:
+        st.subheader("Your Cargo Shipments")
+        customer_cargo_df = pd.read_sql("""
+            SELECT
+                c.cargo_id as 'Cargo ID',
+                ct.type_name as 'Cargo Type',
+                cs.status_name as Status,
+                c.weight as Weight,
+                c.calculated_price as Price,
+                l_orig.airport_code as Origin,
+                l_dest.airport_code as Destination,
+                f.flight_id as 'Flight ID',
+                f.departure_time as Departure
+            FROM Cargo c
+            JOIN CargoType ct ON c.cargo_type_id = ct.cargo_type_id
+            JOIN CargoStatus cs ON c.status_id = cs.status_id
+            JOIN Location l_orig ON c.origin_id = l_orig.location_id
+            JOIN Location l_dest ON c.destination_id = l_dest.location_id
+            JOIN Flight f ON c.flight_id = f.flight_id
+            WHERE c.customer_id = %s
+            ORDER BY f.departure_time DESC
+        """, conn, params=(st.session_state.user['user_id'],))
+        display_dataframe(customer_cargo_df)
 
     # Book new cargo
     st.subheader("Book New Cargo")
     cargo_types = pd.read_sql("SELECT cargo_type_id, type_name FROM CargoType", conn)
     flights = pd.read_sql("""
-        SELECT f.flight_id, 
-               CONCAT(l_orig.airport_code, ' -> ', l_dest.airport_code, 
-                     ' (', DATE_FORMAT(f.departure_time, '%%Y-%%m-%%d %%H:%%i'), ')') as flight_info
+        SELECT f.flight_id,
+               CONCAT(l_orig.airport_code, ' -> ', l_dest.airport_code,
+                     ' (', DATE_FORMAT(f.departure_time, '%Y-%m-%d %H:%i'), ')') as flight_info
         FROM Flight f
         JOIN Location l_orig ON f.origin_id = l_orig.location_id
         JOIN Location l_dest ON f.destination_id = l_dest.location_id
         WHERE f.departure_time > NOW()
         ORDER BY f.departure_time
     """, conn)
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         cargo_type = st.selectbox("Cargo Type", cargo_types['type_name'])
         weight = st.number_input("Weight (kg)", min_value=0.1, max_value=10000.0, value=100.0)
-    
+
     with col2:
         flight = st.selectbox("Flight", flights['flight_info'])
-        st.write("") # Spacing
-        st.write("") # Spacing
-        book_button = st.button("Book Cargo", type="primary")
-    
+
+    # Book cargo button
+    book_button = st.button("Book Cargo", type="primary")
+
     if book_button:
         cursor = conn.cursor()
         flight_id = flights.loc[flights['flight_info'] == flight, 'flight_id'].iloc[0]
         cargo_type_id = cargo_types.loc[cargo_types['type_name'] == cargo_type, 'cargo_type_id'].iloc[0]
-        
+
         # Get flight origin and destination
         cursor.execute("""
-            SELECT origin_id, destination_id 
-            FROM Flight 
+            SELECT origin_id, destination_id
+            FROM Flight
             WHERE flight_id = %s
         """, (flight_id,))
         origin_id, destination_id = cursor.fetchone()
-        
-        cursor.callproc('CreateCargoBooking', 
-                       (st.session_state.user['user_id'], 
-                        cargo_type_id, flight_id, weight, 
+
+        cursor.callproc('CreateCargoBooking',
+                       (st.session_state.user['user_id'],
+                        cargo_type_id, flight_id, weight,
                         origin_id, destination_id))
         conn.commit()
         st.success("Cargo booked successfully!")
         st.rerun()
         cursor.close()
-    
+
     conn.close()
 
 # Main app
@@ -552,16 +636,64 @@ def main():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
     
-    # Login section
+   # Login section
     if not st.session_state.logged_in:
+        # Set background color and layout
+        st.markdown(
+            """
+            <style>
+                .login-container {
+                    background-color: #f0f4f8;
+                    padding: 30px;
+                    border-radius: 10px;
+                    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+                }
+                .login-title {
+                    font-size: 36px;
+                    font-weight: bold;
+                    color: #2c3e50;
+                    text-align: center;
+                }
+                .login-subtitle {
+                    font-size: 18px;
+                    color: #7f8c8d;
+                    text-align: center;
+                    margin-bottom: 30px;
+                }
+                .login-button {
+                    background-color: #3498db;
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    width: 100%;
+                }
+                .login-button:hover {
+                    background-color: #2980b9;
+                }
+                .error-message {
+                    color: #e74c3c;
+                    text-align: center;
+                    font-size: 14px;
+                    margin-top: 10px;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.title("Cargo Management System")
-            st.subheader("Login")
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            
-            if st.button("Login", type="primary"):
+            # Add title and subtitle
+            st.markdown('<div class="login-title">Cargo Management System</div>', unsafe_allow_html=True)
+            st.markdown('<div class="login-subtitle">Please enter your login credentials</div>', unsafe_allow_html=True)
+
+            # Username and Password Inputs
+            username = st.text_input("Username", label_visibility="collapsed", placeholder="Enter your username")
+            password = st.text_input("Password", type="password", label_visibility="collapsed", placeholder="Enter your password")
+
+            # Login button
+            if st.button("Login", type="primary", help="Click to log in", key="login_button"):
                 user = authenticate(username, password)
                 if user:
                     st.session_state.logged_in = True
@@ -569,7 +701,7 @@ def main():
                     st.success(f"Welcome {user['username']}!")
                     st.rerun()
                 else:
-                    st.error("Invalid username or password")
+                    st.markdown('<div class="error-message">Invalid username or password</div>', unsafe_allow_html=True)
     
     # Show appropriate dashboard based on role
     else:
