@@ -43,6 +43,4 @@ pip install streamlit mysql-connector-python pandas
  streamlit run app.py
 ```
 
-The password is `password`,similarly for `cargo_customer`, `cargo_handler` and `cargo_customer`.
-
-Check `testing.md` to see what functionalites the code should have
+The password is `password` for all users, `customer1`, `handler1` and `customer1`.
