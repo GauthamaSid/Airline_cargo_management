@@ -8,30 +8,4 @@ backgroundColor = "#f1efe7"  # Light background for the app
 secondaryBackgroundColor = "#f6f4ef"  # Subtle light background for secondary elements
 textColor = "#333333"  # Dark text for readability
 font = "sans serif"  # Default font
-headerFont = "Arial"  # Header font can be customized
-codeFont = "Courier"  # Font for code blocks, can be customized
-lineHeight = 1.5  # Adjust line height for better readability
 
-# Additional theming options for more control
-accentColor = "#f39c12"  # Custom accent color, often used for buttons, links, etc.
-secondaryTextColor = "#707070"  # Lighter color for secondary text, such as subtitles
-warningColor = "#e67e22"  # Color for warning messages
-errorColor = "#e74c3c"  # Color for error messages
-successColor = "#2ecc71"  # Color for success messages
-
-# Components theme settings
-buttonColor = "#d97857"  # Primary button color
-buttonTextColor = "#ffffff"  # Button text color (contrast for readability)
-sidebarBackgroundColor = "#e8e6df"  # Sidebar background color
-sidebarTextColor = "#333333"  # Sidebar text color
-sidebarButtonColor = "#d97857"  # Sidebar button color
-sidebarButtonTextColor = "#ffffff"  # Sidebar button text color
-
-# Adjusting borders and shadows for elements
-borderWidth = 1  # Set border width for components (inputs, buttons, etc.)
-borderRadius = 8  # Rounded corners for components
-shadow = "0px 2px 6px rgba(0, 0, 0, 0.1)"  # Subtle shadow for elements
-
-# Customizing the app's overall layout
-padding = "20px"  # Add padding around the app's components
-maxWidth = "1200px"  # Set max width for the app, so it doesn't stretch too wide on large screens

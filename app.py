@@ -1,7 +1,6 @@
 import streamlit as st
 import mysql.connector
 import pandas as pd
-from datetime import datetime
 import uuid
 
 # Set page configuration for wider layout
@@ -390,12 +389,9 @@ def show_admin_dashboard():
     
     # Admin Dashboard Metrics
 
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 import pandas as pd
 import streamlit as st
-import numpy as np
-from matplotlib.patches import Rectangle
 import plotly.express as px
 
 def show_admin_dashboard_metrics():
