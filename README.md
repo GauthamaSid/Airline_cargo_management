@@ -1,10 +1,15 @@
 # Airline Cargo Management System
 
-This repository contains the SQL schema, data, and stored procedures for a Cargo Management System. It allows for the management of cargo bookings, user roles, cargo handling actions, and flights.
+This is a Streamlit-based Cargo Management System that allows users to manage cargo shipments, flights, and users. The system supports three roles: admin, cargo handler, and customer.
 
 ## Setup Instructions
 
-### 1. Create the Database
+### 1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/cargo-management-system.git
+cd cargo-management-system
+```
+### 2. Create the Database:
 
 Execute the following SQL commands in your MySQL terminal to create the `cargo_db` database:
 
@@ -23,7 +28,7 @@ source database_clear.sql;
 ```
 The `database_clear.sql` script will create the required database schema, tables,etc.
 
-### 2.Create Virtual Environment:
+### 3.Create Virtual Environment:
 
 ```python
 
@@ -31,10 +36,10 @@ python3 -m venv cargo_env
 source cargo_env/bin/activate  # or `cargo_env\Scripts\activate` on Windows
 
 ```
-### 3. Install streamlet and dependencies 
+### 4. Install streamlet and dependencies 
 
 ```python
-pip install streamlit mysql-connector-python pandas
+pip install -r requirements.txt
 ```
 
 ## Usage 
@@ -43,4 +48,4 @@ pip install streamlit mysql-connector-python pandas
  streamlit run app.py
 ```
 
-The password is `password` for all users, `customer1`, `handler1` and `customer1`.
+The password is `password` for all users (`customer1`, `handler1` and `customer1`).
