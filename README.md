@@ -1,6 +1,17 @@
 # Airline Cargo Management System
 
 This is a Streamlit-based Cargo Management System that allows users to manage cargo shipments, flights, and users. The system supports three roles: admin, cargo handler, and customer.
+## Prerequisites
+### Python 3.12
+### Streamlit
+ ```bash
+pip install streamlit
+```
+### MySQL Server
+```bash
+sudo apt-get update
+sudo apt-get install mysql-server
+```
 
 ## Setup Instructions
 
