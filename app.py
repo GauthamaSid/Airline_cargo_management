@@ -1,5 +1,6 @@
 import streamlit as st
 import mysql.connector
+from mysql.connector import Error
 import pandas as pd
 import uuid
 
@@ -7,13 +8,29 @@ import uuid
 st.set_page_config(layout="wide")
 
 # Database connection configuration
+
+#def get_database_connection():
+ #   return mysql.connector.connect(
+  #      host="localhost",
+   #     user="cargo_admin",
+    #    password="admin_password",
+     #   database="cargo_db"
+    #)
+
+
 def get_database_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="cargo_admin",
-        password="admin_password",
-        database="cargo_db"
-    )
+    try:
+        conn = mysql.connector.connect(
+            host='localhost',
+            user='cargo_admin',
+            password='admin_password',
+            database='cargo_db'
+        )
+        if conn.is_connected():
+            return conn
+    except Error as e:
+        st.error(f"Error connecting to the database: {e}")
+        return None
 
 # Helper function to format dataframes
 def display_dataframe(df, height=400):
@@ -261,19 +278,29 @@ def show_admin_dashboard():
     with tabs[2]:
         st.subheader("Flight Management")
         
-        # Show all flights
+       # Show all flights
         flights_df = pd.read_sql("""
             SELECT
-                flight_id as 'Flight ID',
-                aircraft_id as 'Aircraft ID',
-                origin_id as 'Origin Location ID',
-                destination_id as 'Destination Location ID',
-                departure_time as 'Departure Time',
-                arrival_time as 'Arrival Time',
-                flight_status as 'Flight Status'
-            FROM Flight
+                f.flight_id as 'Flight ID',
+                f.aircraft_id as 'Aircraft ID',
+                l_orig.city as 'Origin City',
+                l_orig.country as 'Origin Country',
+                l_orig.airport_code as 'Origin Airport Code',
+                l_dest.city as 'Destination City',
+                l_dest.country as 'Destination Country',
+                l_dest.airport_code as 'Destination Airport Code',
+                f.departure_time as 'Departure Time',
+                f.arrival_time as 'Arrival Time',
+                f.flight_status as 'Flight Status'
+            FROM
+                Flight f
+            JOIN
+                Location l_orig ON f.origin_id = l_orig.location_id
+            JOIN
+                Location l_dest ON f.destination_id = l_dest.location_id
         """, conn)
         display_dataframe(flights_df)
+
         
         # Create and Update flights in separate columns
         col1, col2 = st.columns(2)
@@ -472,61 +499,100 @@ def show_admin_dashboard_metrics():
         st.plotly_chart(fig)
 
     conn.close()
-# Cargo Handler Dashboard
 def show_handler_dashboard():
     st.header("Cargo Handler Dashboard")
-    
+
     conn = get_database_connection()
+
     
-    # Show pending cargo
-    st.subheader("Pending Cargo")
-    pending_cargo_df = pd.read_sql("""
-        SELECT 
-            c.cargo_id as 'Cargo ID',
-            ct.type_name as 'Cargo Type',
-            c.weight as Weight,
-            l_orig.airport_code as Origin,
-            l_dest.airport_code as Destination,
-            f.flight_id as 'Flight ID',
-            f.departure_time as Departure
-        FROM Cargo c
-        JOIN CargoType ct ON c.cargo_type_id = ct.cargo_type_id
-        JOIN Location l_orig ON c.origin_id = l_orig.location_id
-        JOIN Location l_dest ON c.destination_id = l_dest.location_id
-        JOIN Flight f ON c.flight_id = f.flight_id
-        WHERE c.status_id = 'CS1'
-        ORDER BY f.departure_time
-    """, conn)
-    display_dataframe(pending_cargo_df)
-    
+    cargo_types = ['Electronics', 'Clothing', 'Food', 'Machinery']
+    counts = [50, 30, 40, 20]
+
+    # Create a DataFrame
+    df = pd.DataFrame({'Cargo Type': cargo_types, 'Count': counts})
+
+    # Create a bar chart
+    fig = px.bar(
+        df,
+        x='Cargo Type',
+        y='Count',
+        text='Count',
+        color='Cargo Type',
+        color_discrete_sequence=px.colors.qualitative.Pastel
+    )
+
+    # Update layout for rounded corners and cleaner look
+    fig.update_layout(
+        plot_bgcolor="#f1efe7",
+        paper_bgcolor="#f1efe7",
+        font=dict(size=12),
+        showlegend=False,
+        margin=dict(l=20, r=20, t=40, b=20),
+        bargap=0.15,  # Space between bars
+        bargroupgap=0.1,
+        barcornerradius=14   # Space between groups of bars
+    )
+
+    # Update trace settings to add text on top of each bar without border
+    fig.update_traces(textposition="outside")
+    # Create a two-column layout for the graph and other information
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.header('Cargo Type Distribution')
+        st.plotly_chart(fig)
+
+    with col2:
+        # Show pending cargo
+        st.subheader("Pending Cargo")
+        pending_cargo_df = pd.read_sql("""
+            SELECT
+                c.cargo_id as 'Cargo ID',
+                ct.type_name as 'Cargo Type',
+                c.weight as Weight,
+                l_orig.airport_code as Origin,
+                l_dest.airport_code as Destination,
+                f.flight_id as 'Flight ID',
+                f.departure_time as Departure
+            FROM Cargo c
+            JOIN CargoType ct ON c.cargo_type_id = ct.cargo_type_id
+            JOIN Location l_orig ON c.origin_id = l_orig.location_id
+            JOIN Location l_dest ON c.destination_id = l_dest.location_id
+            JOIN Flight f ON c.flight_id = f.flight_id
+            WHERE c.status_id = 'CS1'
+            ORDER BY f.departure_time
+        """, conn)
+        display_dataframe(pending_cargo_df)
+
+
     # Update cargo status
     st.subheader("Update Cargo Status")
     col1, col2 = st.columns(2)
-    
+
     with col1:
         cargo_id = st.selectbox("Select Cargo ID", pending_cargo_df['Cargo ID'].tolist())
         new_status = st.selectbox("Select New Status", ["IN_TRANSIT", "DELIVERED"])
-    
+
     with col2:
         action = st.selectbox("Select Action", ["PICKUP", "LOAD", "UNLOAD", "DELIVER"])
         notes = st.text_area("Notes")
-    
+
     if st.button("Update Status", type="primary"):
         cursor = conn.cursor()
         status_map = {"IN_TRANSIT": "CS2", "DELIVERED": "CS3"}
         action_map = {"PICKUP": "HA1", "LOAD": "HA2", "UNLOAD": "HA3", "DELIVER": "HA4"}
-        
-        cursor.callproc('UpdateCargoStatus', 
-                       (cargo_id, status_map[new_status], 
-                        st.session_state.user['user_id'], 
+
+        cursor.callproc('UpdateCargoStatus',
+                       (cargo_id, status_map[new_status],
+                        st.session_state.user['user_id'],
                         action_map[action], notes))
         conn.commit()
         st.success("Cargo status updated successfully!")
         st.rerun()
         cursor.close()
-    
-    conn.close()
 
+   
+    conn.close()
 
 def show_customer_dashboard():
     st.header("Customer Dashboard")

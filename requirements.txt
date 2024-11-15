@@ -2,3 +2,5 @@ streamlit
 mysql-connector-python
 pandas
 plotly
+pytest 
+pytest-mock 
