@@ -16,6 +16,8 @@ DROP TABLE IF EXISTS CargoType;
 DROP TABLE IF EXISTS CargoStatus;
 DROP TABLE IF EXISTS HandlingAction;
 
+
+
 -- Create tables (with Users instead of "User")
 CREATE TABLE Role (
     role_id VARCHAR(36) PRIMARY KEY,
@@ -178,10 +180,11 @@ INSERT INTO HandlingAction (action_id, action_name, description, requires_verifi
 ('HA4', 'DELIVER', 'Cargo delivered to destination', TRUE);
 
 -- Sample Flights
+/*
 INSERT INTO Flight (flight_id, aircraft_id, origin_id, destination_id, departure_time, arrival_time, flight_status) VALUES
 ('F1', 'A1', 'L1', 'L2', '2024-12-10 10:00:00', '2024-12-10 22:00:00', 'SCHEDULED'),
 ('F2', 'A2', 'L2', 'L3', '2024-12-11 14:00:00', '2024-12-12 06:00:00', 'SCHEDULED');
-
+*/
 -- Sample Cargo
 INSERT INTO Cargo (cargo_id, customer_id, cargo_type_id, status_id, flight_id, weight, origin_id, destination_id, calculated_price) VALUES
 ('C1', 'U4', 'CT1', 'CS1', 'F1', 1000.00, 'L1', 'L2', 5000.00),
@@ -370,3 +373,20 @@ CALL UpdateCargoStatus(
     'HA1',   -- action_id (PICKUP)
     'Cargo picked up from origin warehouse' -- notes
 );
+
+---auto trigger
+DELIMITER //
+
+CREATE TRIGGER IF NOT EXISTS after_flight_arrival
+AFTER UPDATE ON Flight
+FOR EACH ROW
+BEGIN
+    IF NEW.flight_status = 'ARRIVED' THEN
+        UPDATE Cargo
+        SET status_id = 'CS3' -- Assuming 'CS3' is the status_id for 'DELIVERED'
+        WHERE flight_id = NEW.flight_id;
+    END IF;
+END //
+
+DELIMITER ;
+

@@ -527,6 +527,7 @@ def show_handler_dashboard():
     
     conn.close()
 
+
 def show_customer_dashboard():
     st.header("Customer Dashboard")
 
@@ -627,6 +628,72 @@ def show_customer_dashboard():
 
     conn.close()
 
+def delete_cargo():
+    st.header("Delete Cargo")
+
+    conn = get_database_connection()
+    cursor = conn.cursor()
+
+    # Fetch cargo data
+    cursor.execute("""
+        SELECT c.cargo_id, c.customer_id, c.cargo_type_id, cs.status_name, c.flight_id, c.weight, c.origin_id, c.destination_id, c.calculated_price, c.booking_date
+        FROM Cargo c
+        JOIN CargoStatus cs ON c.status_id = cs.status_id
+        WHERE c.customer_id = %s AND cs.status_name IN ('SCHEDULED', 'PENDING')
+    """, (st.session_state.user['user_id'],))
+
+    cargo = cursor.fetchall()
+    cargo_df = pd.DataFrame(cargo, columns=["Cargo ID", "Customer ID", "Cargo Type ID", "Status", "Flight ID", "Weight", "Origin ID", "Destination ID", "Calculated Price", "Booking Date"])
+
+    if not cargo_df.empty:
+        display_dataframe(cargo_df)
+    else:
+        st.info("No scheduled or pending cargo available for deletion.")
+
+    # Delete cargo
+    cargo_id = st.selectbox("Select Cargo ID", cargo_df["Cargo ID"])
+
+    if st.button("Delete Cargo", type="primary"):
+        try:
+            cursor.execute("DELETE FROM Cargo WHERE cargo_id = %s", (cargo_id,))
+            conn.commit()
+            st.success("Cargo deleted successfully!")
+            st.rerun()
+        except Exception as e:
+            conn.rollback()
+            st.error(f"Error deleting cargo: {e}")
+
+    cursor.close()
+    conn.close()
+
+
+# Function to display cargo status
+def show_cargo_status():
+    st.header("Cargo Status")
+
+    conn = get_database_connection()
+    cursor = conn.cursor()
+
+    # Fetch cargo status for the logged-in customer
+    cursor.execute("""
+        SELECT c.cargo_id, c.customer_id, c.cargo_type_id, cs.status_name, c.flight_id, c.weight, c.origin_id, c.destination_id, c.calculated_price, c.booking_date
+        FROM Cargo c
+        JOIN CargoStatus cs ON c.status_id = cs.status_id
+        WHERE c.customer_id = %s
+    """, (st.session_state.user['user_id'],))
+
+    cargo_status = cursor.fetchall()
+    cargo_status_df = pd.DataFrame(cargo_status, columns=["Cargo ID", "Customer ID", "Cargo Type ID", "Status", "Flight ID", "Weight", "Origin ID", "Destination ID", "Calculated Price", "Booking Date"])
+
+    if not cargo_status_df.empty:
+        display_dataframe(cargo_status_df)
+    else:
+        st.info("No cargo available.")
+
+    cursor.close()
+    conn.close()
+
+
 # Main app
 def main():
     if 'logged_in' not in st.session_state:
@@ -720,6 +787,8 @@ def main():
             show_handler_dashboard()
         elif role == 'customer':
             show_customer_dashboard()
+            show_cargo_status() 
+            delete_cargo() 
 
 if __name__ == "__main__":
     main()
